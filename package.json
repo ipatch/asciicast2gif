@@ -1,6 +1,6 @@
 {
   "name": "asciicast2gif",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "asciinema GIF generator",
   "main": "main.js",
   "bin": {
@@ -30,7 +30,8 @@
   },
   "author": "Marcin Kulik",
   "contributors": [
-    "Sebastian Schmidt (https://github.com/publicarray)"
+    "Sebastian Schmidt (https://github.com/publicarray)",
+    "Mathieu Aubin (https://github.com/mathieu-aubin)"
   ],
   "license": "MIT",
   "bugs": {
