@@ -1,3 +1,5 @@
+# This readme is from the official repository and is not relevant to the current code
+
 # asciicast2gif
 
 asciicast2gif is a tool for generating GIF animations from

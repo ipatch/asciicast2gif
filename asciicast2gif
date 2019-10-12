@@ -2,52 +2,55 @@
 
 set -e
 
-# Set debugg according to $DEBUG env. variable
+# Set debug according to ${DEBUG} env. variable
 # Debugging is disabled by default
 export DEBUG=${DEBUG:-0}
+
+# Output notice about debug mode being set to ON
+[[ ${DEBUG} -eq 1 ]] && >&2 echo -e "\n\x1b[1;38;5;196m*** DEBUG MODE IS ON ***\n";
 
 path_to_self="${BASH_SOURCE[0]}"
 
 # Detect path
 if [[ -L "$path_to_self" ]]; then
-    asciicast2gif_dir="$(cd "$(dirname "$path_to_self")"/"$(dirname "$(readlink "$path_to_self")")" && pwd)"
+    asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")"/"$(dirname "$(readlink "${path_to_self}")")" && pwd)"
 else
-    asciicast2gif_dir="$(cd "$(dirname "$path_to_self")" && pwd)"
+    asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")" && pwd)"
 fi
 
 # Check for the presence of 'node' executable, exit on error
 if ! type "node" >/dev/null 2>&1; then
-    echo "error: Node.js not installed? Executable 'node' not found"
+    echo "Error: Node.js not installed? Executable 'node' not found"
     exit 1
 fi
 
 # Check for the presence of 'convert' executable, exit on error
 if ! type "convert" >/dev/null 2>&1; then
-    echo "error: ImageMagick not installed? Executable 'convert' not found"
+    echo "Error: ImageMagick not installed? Executable 'convert' not found"
     exit 1
 fi
 
 # Check for the presence of 'gifsicle' executable, exit on error
 if ! type "gifsicle" >/dev/null 2>&1; then
-    echo "error: gifsicle not installed? Executable 'gifsicle' not found"
+    echo "Error: gifsicle not installed? Executable 'gifsicle' not found"
     exit 1
 fi
 
 # Check for the presence of './main.js' file, exit on error
 if [[ ! -f "${asciicast2gif_dir}/main.js" ]]; then
-    echo "error: ${asciicast2gif_dir}/main.js not found. Build it with: lein cljsbuild once main"
+    echo "Error: ${asciicast2gif_dir}/main.js not found. Build it with: lein cljsbuild once main"
     exit 1
 fi
 
 # Check for the presence of './page/page.js' file, exit on error
 if [[ ! -f "${asciicast2gif_dir}/page/page.js" ]]; then
-    echo "error: ${asciicast2gif_dir}/page/page.js not found. Build it with: lein cljsbuild once page"
+    echo "Error: ${asciicast2gif_dir}/page/page.js not found. Build it with: lein cljsbuild once page"
     exit 1
 fi
 
 # Check for the presence of 'mktemp' executable, exit on error
 if ! type "mktemp" >/dev/null 2>&1; then
-    echo "error: mktemp is required in order to use this program"
+    echo "Error: mktemp is required in order to use this program"
     exit 1
 else
     # Set the temporary path/folder to system default
@@ -60,38 +63,49 @@ speed=1
 scale=1
 width=""
 height=""
+colors=64
+
+function showHelp() {
+	# If an exit code is passed, use it. Otherwise, exit with 0
+	local exitCode=${1:-0};
+	echo "asciicast2gif - Generate GIF animations from asciicasts (asciinema recordings)"
+	echo
+	echo "usage: asciicast2gif [-c color_count] [-t theme] [-T tmppath] [-s speed] [-S scale] [-w columns] [-h rows] <input-json-path-or-url> <output-gif-path>"
+	echo
+	echo "options:"
+	echo "  -c <color_count>  number of colors used in final gif (default: ${colors} colors)"
+	echo "  -t <theme>        color theme, one of: asciinema, tango, solarized-dark, solarized-light, monokai (default: ${theme})"
+	echo "  -T <tmppath>      define substitute temporary path (default: '${tmppath}')"
+	echo "  -s <speed>        animation speed (default: ${speed}x)"
+	echo "  -S <scale>        image scale / pixel density (default: ${scale})"
+	echo "  -w <columns>      clip terminal to specified number of columns (width)"
+	echo "  -h <rows>         clip terminal to specified number of rows (height)"
+	echo "  -H                displays this help"
+	echo
+	# Exit with exitCode if passed, else 0
+	exit ${exitCode}
+}
 
 # If args count is less than 2, display the usage/help options
-if [[ $# -lt 2 ]]; then
-    echo "asciicast2gif - Generate GIF animations from asciicasts (asciinema recordings)"
-    echo
-    echo "usage: asciicast2gif [-t theme] [-T tmppath] [-s speed] [-S scale] [-w columns] [-h rows] <input-json-path-or-url> <output-gif-path>"
-    echo
-    echo "options:"
-    echo "  -t <theme>        color theme, one of: asciinema, tango, solarized-dark, solarized-light, monokai (default: $theme)"
-    echo "  -T <tmppath>      define substitute temporary path (default: '$tmppath')"
-    echo "  -s <speed>        animation speed (default: $speed)"
-    echo "  -S <scale>        image scale / pixel density (default: $scale)"
-    echo "  -w <columns>      clip terminal to specified number of columns (width)"
-    echo "  -h <rows>         clip terminal to specified number of rows (height)"
-    echo
-    exit 1
+if [[ ${#} -lt 2 ]]; then
+	# show help and exit with exit code 1
+	showHelp 1
 fi
 
 # Verify tmppath settings and if we can read/write to it
 function checkTmp() {
     # Check if tmppath directory exists, revert to system default on error
-    if [[ ! -d $tmppath ]]; then
-        echo "warning: provided temporary path is not a directory. Reverting to system default" >&2
+    if [[ ! -d ${tmppath} ]]; then
+        echo "Warning: provided temporary path is not a directory. Reverting to system default" >&2
         # Revert to system default
         tmppath="$(dirname $(mktemp -u))"
     else
         # Perform a write test using tmppath, revert to system default on error
-        rwtest=$(mktemp -p $tmppath -t tmp.rwtest.XXXXXX 2>/dev/null)
-        if [[ -f $rwtest ]]; then
-            rm -f $rwtest
+        rwtest=$(mktemp -p ${tmppath} -t tmp.rwtest.XXXXXX 2>/dev/null)
+        if [[ -f ${rwtest} ]]; then
+            rm -f ${rwtest}
         else
-            echo "warning: cannot read/write to provided temporary path. Reverting to system default" >&2
+            echo "Warning: cannot read/write to provided temporary path. Reverting to system default" >&2
             # Revert to system default
             tmppath="$(dirname $(mktemp -u))"
         fi
@@ -99,33 +113,39 @@ function checkTmp() {
 }
 
 # Loop thru options
-while getopts ":w:h:t:T:s:S:" opt; do
-    case $opt in
+while getopts ":c:w:h:t:T:s:S:H" opt; do
+    case ${opt} in
+        c)
+            colors=${OPTARG}
+            ;;
         t)
-            theme=$OPTARG
+            theme=${OPTARG}
             ;;
         T)
-            tmppath=$OPTARG
+            tmppath=${OPTARG}
             checkTmp
             ;;
         s)
-            speed=$OPTARG
+            speed=${OPTARG}
             ;;
         S)
-            scale=$OPTARG
+            scale=${OPTARG}
             ;;
         w)
-            width=$OPTARG
+            width=${OPTARG}
             ;;
         h)
-            height=$OPTARG
+            height=${OPTARG}
+            ;;
+        H)
+            showHelp
             ;;
         \?)
-            echo "Invalid option: -$OPTARG" >&2
+            echo "Invalid option: -${OPTARG}" >&2
             exit 1
             ;;
         :)
-            echo "Option -$OPTARG requires an argument." >&2
+            echo "Option -${OPTARG} requires an argument." >&2
             exit 1
             ;;
     esac
@@ -135,49 +155,65 @@ shift $((OPTIND-1))
 
 # Test if variables are not empty.
 # Note: variables must be quoted for this test work
-if [[ -n "$width" ]]; then export WIDTH=$width; fi
-if [[ -n "$height" ]]; then export HEIGHT=$height; fi
+if [[ -n "${width}" ]]; then export WIDTH=${width}; fi
+if [[ -n "${height}" ]]; then export HEIGHT=${height}; fi
 
 # Set gifsicle options if they are non-existing
-if [[ -z $GIFSICLE_OPTS ]]; then
-    export GIFSICLE_OPTS="-k 64 -O2 -Okeep-empty"
-    # Check if gifsicle has loss option and use it
-    if [[ $(gifsicle -h 2>/dev/null|grep -q 'lossy') ]]; then
-        export GIFSICLE_OPTS="$GIFSICLE_OPTS --lossy=80"
-    fi
+if [[ -z ${GIFSICLE_OPTS} ]]; then
+	export GIFSICLE_OPTS="-k ${colors} -O2 -Okeep-empty"
+	# Check if gifsicle has loss option and use it
+	if $(gifsicle -h 2>/dev/null|grep -q 'lossy'); then
+		export GIFSICLE_OPTS="${GIFSICLE_OPTS} --lossy=80"
+	fi
+else
+	[[ ${DEBUG} -ne 0 ]] && >&2 echo -e "\x1b[1;38;5;196m* \$GIFSICLE_OPTS is already defined in env variable \x1b[0m";
 fi
 
 # Create a temporary directory. First try using
 # a template, then using system default naming
-tmp_dir=$(mktemp -p $tmppath -d -t 'asciicast2gif-tmp.XXXXXXXXXX' 2>/dev/null || mktemp -p $tmppath -d 2>/dev/null)
+tmp_dir=$(mktemp -p ${tmppath} -d -t 'asciicast2gif-tmp.XXXXXXXXXX' 2>/dev/null || mktemp -p ${tmppath} -d 2>/dev/null)
 
-# If debugging is disabled (default), set a trap on exit
-# signals in order to remove the temporary directory
-[[ $DEBUG -eq 0 ]] && trap 'rm -rf $tmp_dir' EXIT
+if [[ ${DEBUG} -ne 0 ]]; then
+	# If debugging is enabled, display config vars
+	[[ -n ${colors} ]] && >&2 echo -e "\x1b[1;38;5;196m* Colors : ${colors}";
+	[[ -n ${theme} ]] && >&2 echo -e "\x1b[1;38;5;196m* Theme  : ${theme}\x1b[0m";
+	[[ -n ${speed} ]] && >&2 echo -e "\x1b[1;38;5;196m* Speed  : ${speed}\x1b[0m";
+	[[ -n ${speed} ]] && >&2 echo -e "\x1b[1;38;5;196m* Scale  : ${scale}\x1b[0m";
+	[[ -n ${height} ]] && >&2 echo -e "\x1b[1;38;5;196m* Height : ${height}\x1b[0m";
+	[[ -n ${width} ]] && >&2 echo -e "\x1b[1;38;5;196m* Width  : ${width}\x1b[0m";
+	[[ -n ${tmp_dir} ]] && >&2 echo -e "\x1b[1;38;5;196m* TmpPath: ${tmp_dir}\x1b[0m";
+	>&2 echo -e "\n\x1b[1;38;5;196m* Gifsicle options: ${GIFSICLE_OPTS}\x1b[0m";
+	>&2 echo -e "\n\x1b[1;38;5;196m* Temporary directory will NOT be deleted\x1b[0m";
+	sleep 2;
+else
+	# If debugging is disabled (default), set a trap on exit
+	# signals in order to remove the temporary directory
+	trap 'rm -rf $tmp_dir' EXIT
+fi
 
 # Run the command
 node \
-    $NODE_OPTS \
-    "${asciicast2gif_dir}/main.js" \
-    "${1}" \
-    "${2}" \
-    "${tmp_dir}" \
-    $theme \
-    $speed \
-    $scale
+	${NODE_OPTS} \
+	"${asciicast2gif_dir}/main.js" \
+	"${1}" \
+	"${2}" \
+	"${tmp_dir}" \
+	${theme} \
+	${speed} \
+	${scale}
 
 # Set nret to node return code
-nret=$?
+nret=${?}
 
-[[ $DEBUG -ne 0 ]] && echo "NodeJS return code: $nret" >&2;
+# If debug is enabled, display nodejs return code
+[[ ${DEBUG} -ne 0 ]] && >&2 echo "* NodeJS return code: ${nret}" >&2;
 
-# Check return code of node run and act accordingly
-if [[ $nret -ne 0 ]]; then
+# Check return code of node run and act accordingly and
+# force an exit code in order to trigger the previously set trap
+if [[ ${nret} -ne 0 ]]; then
     echo -e "\x1b[1;38;5;196m==> \x1b[0mFailed"
-    # force an exit code in order to trigger the previously set trap
-    exit $nret
+    exit ${nret}
 else
     echo -e "\x1b[32m==> \x1b[0mDone."
-    # force an exit code in order to trigger the previously set trap
-    exit $nret
+    exit ${nret}
 fi
