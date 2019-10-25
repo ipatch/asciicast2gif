@@ -1,60 +1,64 @@
 #!/usr/bin/env bash
-
+#                     __ __                    __   ______         __   ___
+#  .---.-.-----.----.|__|__|.----.---.-.-----.|  |_|__    |.-----.|__|.'  _|
+#  |  _  |__ --|  __||  |  ||  __|  _  |__ --||   _|    __||  _  ||  ||   _|
+#  |___._|_____|____||__|__||____|___._|_____||____|______||___  ||__||__|
+#                                                          |_____|
+#
+#  -[ Easily convert your asciinema-recorded casts to Gif ]-
+#
 set -e
 
 # Set debug according to ${DEBUG} env. variable
 # Debugging is disabled by default
 export DEBUG=${DEBUG:-0}
 
-# Output notice about debug mode being set to ON
-[[ ${DEBUG} -eq 1 ]] && >&2 echo -e "\n\x1b[1;38;5;196m*** DEBUG MODE IS ON ***\n";
-
 path_to_self="${BASH_SOURCE[0]}"
 
 # Detect path
 if [[ -L "$path_to_self" ]]; then
-    asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")"/"$(dirname "$(readlink "${path_to_self}")")" && pwd)"
+	asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")"/"$(dirname "$(readlink "${path_to_self}")")" && pwd)"
 else
-    asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")" && pwd)"
+	asciicast2gif_dir="$(cd "$(dirname "${path_to_self}")" && pwd)"
 fi
 
 # Check for the presence of 'node' executable, exit on error
 if ! type "node" >/dev/null 2>&1; then
-    echo "Error: Node.js not installed? Executable 'node' not found"
-    exit 1
+	echo "Error: Node.js not installed? Executable 'node' not found"
+	exit 1
 fi
 
 # Check for the presence of 'convert' executable, exit on error
 if ! type "convert" >/dev/null 2>&1; then
-    echo "Error: ImageMagick not installed? Executable 'convert' not found"
-    exit 1
+	echo "Error: ImageMagick not installed? Executable 'convert' not found"
+	exit 1
 fi
 
 # Check for the presence of 'gifsicle' executable, exit on error
 if ! type "gifsicle" >/dev/null 2>&1; then
-    echo "Error: gifsicle not installed? Executable 'gifsicle' not found"
-    exit 1
+	echo "Error: gifsicle not installed? Executable 'gifsicle' not found"
+	exit 1
 fi
 
 # Check for the presence of './main.js' file, exit on error
 if [[ ! -f "${asciicast2gif_dir}/main.js" ]]; then
-    echo "Error: ${asciicast2gif_dir}/main.js not found. Build it with: lein cljsbuild once main"
-    exit 1
+	echo "Error: ${asciicast2gif_dir}/main.js not found. Build it with: lein cljsbuild once main"
+	exit 1
 fi
 
 # Check for the presence of './page/page.js' file, exit on error
 if [[ ! -f "${asciicast2gif_dir}/page/page.js" ]]; then
-    echo "Error: ${asciicast2gif_dir}/page/page.js not found. Build it with: lein cljsbuild once page"
-    exit 1
+	echo "Error: ${asciicast2gif_dir}/page/page.js not found. Build it with: lein cljsbuild once page"
+	exit 1
 fi
 
 # Check for the presence of 'mktemp' executable, exit on error
 if ! type "mktemp" >/dev/null 2>&1; then
-    echo "Error: mktemp is required in order to use this program"
-    exit 1
+	echo "Error: mktemp is required in order to use this program"
+	exit 1
 else
-    # Set the temporary path/folder to system default
-    tmppath="$(dirname $(mktemp -u))"
+	# Set the temporary path/folder to system default
+	tmppath="$(dirname $(mktemp -u))"
 fi
 
 # Define/initialize default variables
@@ -73,13 +77,15 @@ function showHelp() {
 	echo "usage: asciicast2gif [-c color_count] [-t theme] [-T tmppath] [-s speed] [-S scale] [-w columns] [-h rows] <input-json-path-or-url> <output-gif-path>"
 	echo
 	echo "options:"
-	echo "  -c <color_count>  number of colors used in final gif (default: ${colors} colors)"
+	echo "  -c <color_count>  number of colors used in final gif (default: ${colors})"
 	echo "  -t <theme>        color theme, one of: asciinema, tango, solarized-dark, solarized-light, monokai (default: ${theme})"
 	echo "  -T <tmppath>      define substitute temporary path (default: '${tmppath}')"
 	echo "  -s <speed>        animation speed (default: ${speed}x)"
 	echo "  -S <scale>        image scale / pixel density (default: ${scale})"
 	echo "  -w <columns>      clip terminal to specified number of columns (width)"
 	echo "  -h <rows>         clip terminal to specified number of rows (height)"
+	echo "  -D                enable debug mode (default: disabled)"
+	echo "  -C                force cleaning of temporary path (default, useful when debug is on)"
 	echo "  -H                displays this help"
 	echo
 	# Exit with exitCode if passed, else 0
@@ -94,64 +100,93 @@ fi
 
 # Verify tmppath settings and if we can read/write to it
 function checkTmp() {
-    # Check if tmppath directory exists, revert to system default on error
-    if [[ ! -d ${tmppath} ]]; then
-        echo "Warning: provided temporary path is not a directory. Reverting to system default" >&2
-        # Revert to system default
-        tmppath="$(dirname $(mktemp -u))"
-    else
-        # Perform a write test using tmppath, revert to system default on error
-        rwtest=$(mktemp -p ${tmppath} -t tmp.rwtest.XXXXXX 2>/dev/null)
-        if [[ -f ${rwtest} ]]; then
-            rm -f ${rwtest}
-        else
-            echo "Warning: cannot read/write to provided temporary path. Reverting to system default" >&2
-            # Revert to system default
-            tmppath="$(dirname $(mktemp -u))"
-        fi
-    fi
+	# Check if tmppath directory exists, revert to system default on error
+	if [[ ! -d ${tmppath} ]]; then
+		>&2 echo "Warning: provided temporary path is not a directory. Reverting to system default"
+		# Revert to system default
+		tmppath="$(dirname $(mktemp -u))"
+	else
+		# Perform a write test using tmppath, revert to system default on error
+		rwtest=$(mktemp -p ${tmppath} -t tmp.rwtest.XXXXXX 2>/dev/null)
+		if [[ -f ${rwtest} ]]; then
+			rm -f ${rwtest}
+		else
+			>&2 echo "Warning: cannot read/write to provided temporary path. Reverting to system default"
+			# Revert to system default
+			tmppath="$(dirname $(mktemp -u))"
+		fi
+	fi
+}
+
+# Check if we should cleanup temporary directory (default yes)
+function cleanTmp() {
+	# Force ${tmp_dir} removal even when debug is enabled using ${CLEANTMP} env. variable
+	if [[ ${CLEANTMP} -eq 1 ]]; then
+		if [[ -d "${tmp_dir}" ]]; then
+			[[ ${DEBUG} -ne 0 ]] && >&2 echo -e "\x1b[1;38;5;196m* Removing Temporary directory (FORCED REMOVAL)...\x1b[0m"
+			rm -rf "${tmp_dir}"
+		fi
+	fi
 }
 
 # Loop thru options
-while getopts ":c:w:h:t:T:s:S:H" opt; do
-    case ${opt} in
-        c)
-            colors=${OPTARG}
-            ;;
-        t)
-            theme=${OPTARG}
-            ;;
-        T)
-            tmppath=${OPTARG}
-            checkTmp
-            ;;
-        s)
-            speed=${OPTARG}
-            ;;
-        S)
-            scale=${OPTARG}
-            ;;
-        w)
-            width=${OPTARG}
-            ;;
-        h)
-            height=${OPTARG}
-            ;;
-        H)
-            showHelp
-            ;;
-        \?)
-            echo "Invalid option: -${OPTARG}" >&2
-            exit 1
-            ;;
-        :)
-            echo "Option -${OPTARG} requires an argument." >&2
-            exit 1
-            ;;
-    esac
+while getopts ":c:w:h:t:T:s:S:DH" opt; do
+	case ${opt} in
+		c)
+			colors=${OPTARG}
+			;;
+		D)
+			export DEBUG=1
+			;;
+		t)
+			theme=${OPTARG}
+			;;
+		T)
+			tmppath=${OPTARG}
+			checkTmp
+			;;
+		s)
+			speed=${OPTARG}
+			;;
+		S)
+			scale=${OPTARG}
+			;;
+		w)
+			width=${OPTARG}
+			;;
+		h)
+			height=${OPTARG}
+			;;
+		H)
+			showHelp
+			;;
+		\?)
+			echo "Invalid option: -${OPTARG}" >&2
+			exit 1
+			;;
+		:)
+			echo "Option -${OPTARG} requires an argument." >&2
+			exit 1
+			;;
+	esac
 done
 
 shift $((OPTIND-1))
+
+# When debugging, force removal of temporary directory
+# with env variable ${CLEANTMP}
+# Temporary directory is removed by default
+if [[ -n "${CLEANTMP}" ]]; then
+	export CLEANTMP=${CLEANTMP:-1}
+else
+	export CLEANTMP=0
+fi
+
+# Set a trap on exit/interrupt in order to remove the temporary directory
+trap 'cleanTmp' EXIT INT
+
+# Output notice about debug mode being set to ON
+[[ ${DEBUG} -eq 1 ]] && >&2 echo -e "\n\x1b[1;38;5;196m*** DEBUG MODE IS ON ***\n";
 
 # Test if variables are not empty.
 # Note: variables must be quoted for this test work
@@ -183,12 +218,12 @@ if [[ ${DEBUG} -ne 0 ]]; then
 	[[ -n ${width} ]] && >&2 echo -e "\x1b[1;38;5;196m* Width  : ${width}\x1b[0m";
 	[[ -n ${tmp_dir} ]] && >&2 echo -e "\x1b[1;38;5;196m* TmpPath: ${tmp_dir}\x1b[0m";
 	>&2 echo -e "\n\x1b[1;38;5;196m* Gifsicle options: ${GIFSICLE_OPTS}\x1b[0m";
-	>&2 echo -e "\n\x1b[1;38;5;196m* Temporary directory will NOT be deleted\x1b[0m";
+	if [[ ${CLEANTMP} -ne 0 ]]; then
+		>&2 echo -e "\n\x1b[1;38;5;196m* Temporary directory WILL BE deleted\x1b[0m";
+	else
+		>&2 echo -e "\n\x1b[1;38;5;196m* Temporary directory WILL NOT be deleted\x1b[0m";
+	fi
 	sleep 2;
-else
-	# If debugging is disabled (default), set a trap on exit
-	# signals in order to remove the temporary directory
-	trap 'rm -rf $tmp_dir' EXIT
 fi
 
 # Run the command
@@ -206,14 +241,14 @@ node \
 nret=${?}
 
 # If debug is enabled, display nodejs return code
-[[ ${DEBUG} -ne 0 ]] && >&2 echo "* NodeJS return code: ${nret}" >&2;
+[[ ${DEBUG} -ne 0 ]] && >&2 echo -e "\x1b[1;38;5;196m* NodeJS return code: ${nret}\x1b[0m"
 
-# Check return code of node run and act accordingly and
-# force an exit code in order to trigger the previously set trap
+# Check return code of node run and act accordingly and force an exit
+# code in order to trigger the previously set trap (on exit signals)
 if [[ ${nret} -ne 0 ]]; then
-    echo -e "\x1b[1;38;5;196m==> \x1b[0mFailed"
-    exit ${nret}
+	echo -e "\x1b[1;38;5;196m==> \x1b[0mFailed"
+	exit ${nret}
 else
-    echo -e "\x1b[32m==> \x1b[0mDone."
-    exit ${nret}
+	echo -e "\x1b[32m==> \x1b[0mDone."
+	exit ${nret}
 fi
