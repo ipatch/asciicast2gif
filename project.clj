@@ -1,15 +1,15 @@
-(defproject asciicast2gif "0.1.0-SNAPSHOT"
+(defproject asciicast2gif "0.2.2-SNAPSHOT"
   :description "asciinema GIF generator"
-  :url "http://example.com/FIXME"
+  :url "https://github.com/asciinema/asciicast2gif"
   :license {:name "MIT"}
 
-  :dependencies [[org.clojure/clojure "1.9.0"]
-                 [org.clojure/clojurescript "1.10.238"]
-                 [org.clojure/core.async "0.4.474"]
-                 [prismatic/schema "1.1.6"]
-                 [org.clojure/core.match "0.3.0-alpha4"]
+  :dependencies [[org.clojure/clojure "1.10.1"]
+                 [org.clojure/clojurescript "1.10.520"]
+                 [org.clojure/core.async "0.4.500"]
+                 [prismatic/schema "1.1.12"]
+                 [org.clojure/core.match "0.3.0"]
                  [cljsjs/nodejs-externs "1.0.4-1"]
-                 [reagent "0.7.0"]]
+                 [reagent "0.8.1"]]
 
   :plugins [[lein-cljsbuild "1.1.7"]]
 
